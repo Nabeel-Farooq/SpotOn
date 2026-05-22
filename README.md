@@ -12,16 +12,6 @@ Over the years, I have been the sole developer of SpotOn. During that time, the 
 
 SpotOn began as a personal project, where I fixed issues when I could reproduce them in my own setup. However, recent changes to the Spotify web player have introduced frequent breaking updates, making it increasingly time‑consuming to keep everything working. Combined with slower feature releases from Spotify and a generally declining web experience, the effort required to maintain the extension stopped being sustainable for a one‑person project.
 
-With no growth and me as the only maintainer, I’ve decided to shift my focus to other work, particularly apps and personal websites. If you’d like to see what I’m currently building, you can visit my site at [Kamidevs](https://kamidevs) and explore projects I’m involved in, such as [Loop](https://loop.kamidevs.com).
-
-All existing code for SpotOn will remain publicly available. If you’re interested in forking the project or taking it over, you’re very welcome to reach out via Discord at [Kami](https://discord.com/users/325178652033679362).
-
-If you’d like to support my ongoing work, you can do so via  
-
-- [GitHub Sponsors](https://github.com/sponsors/SenpaiHunters)  
-- [Buy Me A Coffee](https://www.buymeacoffee.com/kami.dev)
-
-Thank you to everyone who installed, used, or gave feedback on SpotOn.
 
 ---
 
@@ -120,38 +110,10 @@ For more information on how to create a custom hotkey, it's pretty simple: click
 
 ---
 
-## Install Guide
-
-The Chrome extension store lags in releases because Chrome's review process can take up to a month. Changes should go live within a few hours ideally. If you install from the source and seek quicker updates than Chrome's Web Store, go for it!
-
-### Install from Chrome Web Store
-
-1. **Install SpotOn Extension:**
-   - Visit [Chrome Web Store](https://chromewebstore.google.com/detail/spoton/hnbcgkmojpjmncmplcnefjnmcbckadff?hl)
-   - Click "Add to Chrome" and review the permissions required.
-   - Proceed by clicking "Add Extension."
-
-2. **Get Started with SpotOn:**
-   - Load Spotify or open a new tab and modify SpotOn settings as needed.
-
-### Permissions Explained
-
-When installing SpotOn (from the chrome web store), you'll be prompted to grant certain permissions. Here's why they are necessary:
-
-- **Read and Change Your Data on open.spotify.com**:
-  - **Purpose**: This permission allows SpotOn to modify the Spotify Web Player's user interface and functionality to provide the features and customizations that SpotOn offers. It's essential for applying visual themes, toggles, and other enhancements directly within your Spotify experience.
-  - **Privacy**: We only modify the client-side presentation and functionality. No modifications are made to the data you send to or receive from Spotify's servers. Your Spotify data remains private and secure.
-
-- **Read Your Browsing History**:
-  - **Purpose**: This might sound more invasive than it is. In reality, SpotOn uses this permission to identify when you have Spotify open in your browser so it can apply the necessary enhancements without you having to do anything extra. By enhancements, this can be the use of a hotkey to open Spotify or anything that requires the extension to locate Spotify. It's used to streamline the process of detecting and interacting with Spotify web pages.
-  - **Privacy**: SpotOn does not track, store, or transmit your browsing history. The extension operates entirely locally on your computer, and this permission is solely for recognizing Spotify web pages to function correctly. Your browsing history remains private and is not accessed for any other purpose.
-
-SpotOn is committed to full transparency and privacy. Being an open-source project, we invite everyone to explore our codebase to see exactly how it functions and ensures user privacy. We encourage a deeper look into our practices and the mechanics behind SpotOn by visiting our repository. For more insights into our approach to privacy and the principles guiding our development, please check out our [License](/license.md) and [Privacy Policy](Private%20Policy.md).
-
 ### Install from Source
 
 1. **Clone the Source Repository:**
-   - Clone via terminal: `gh repo clone SenpaiHunters/SpotOn` or `git clone https://github.com/SenpaiHunters/SpotOn.git`
+   - Clone via terminal: `git clone https://github.com/Nabeel-Farooq/SpotOn`
    - Alternatively, download the source as a ZIP file from the repository.
 
 2. **Set Up the Extension in Chrome:**
@@ -160,18 +122,4 @@ SpotOn is committed to full transparency and privacy. Being an open-source proje
    - Select "Load Unpacked" and navigate to the `SpotOn/SpotOn` folder.
    - Confirm by pressing `enter` or `return` on your keyboard, and customize SpotOn settings as required.
 
-## Contributing
 
-SpotOn thrives on community contributions! Whether it's submitting bug reports, feature requests, or contributing to the code, check out our [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get involved.
-
-## License
-
-SpotOn is released under the [MIT (Modified) License](/LICENSE) by [@senpaihunters](https://github.com/senpaihunters). See the [LICENSE](license.md) file for more details.
-
-## Contact
-
-For support or inquiries, reach out to me via discord at [Kami](https://discord.com/users/325178652033679362).
-
-## Sponsoring
-
-[Buy me a coffee](https://buymeacoffee.com/kami.dev) or [Github Sponsor](https://github.com/sponsors/SenpaiHunters)
