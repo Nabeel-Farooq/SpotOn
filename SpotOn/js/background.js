@@ -1,419 +1,317 @@
-/**
- * Background Manager - Handles background processes and extension lifecycle.
- * 
- * This module manages:
- * - Extension installation and updates
- * - Context menu integration
- * - Hotkey commands
- * - Tab updates and CSS injection
- * - Spotify search integration
- * - Feature initialization
- * 
- * The background manager works by:
- * 1. Setting up context menus and commands
- * 2. Handling extension installation/updates
- * 3. Managing tab updates and CSS injection
- * 4. Processing hotkey commands
- * 5. Maintaining extension state
- * 
- * @class BackgroundManager
- * @property {Object} settings - Extension settings and state
- * @property {Object} commands - Registered hotkey commands
- * 
- */
-
 class BackgroundManager {
+    static SPOTIFY_URL = 'https://open.spotify.com/*';
+
+    static STYLE_IDS = {
+        THEME: 'spoton-color-theme',
+        CUSTOM: 'spoton-custom-css'
+    };
+
+    static STORAGE_KEYS = {
+        SETTINGS: 'settings',
+        CUSTOM_CSS: 'spoton-custom-css',
+        NAV_COLOR: 'navColor',
+        LYRICS_COLOR: 'lyricsColor'
+    };
+
+    static COMMAND_SELECTORS = {
+        "play-pause": [
+            ".spoticon-play-16",
+            ".spoticon-pause-16",
+            "[data-testid=control-button-play]",
+            "[data-testid=control-button-pause]",
+            "[data-testid=control-button-playpause]"
+        ],
+        "next": [
+            ".spoticon-skip-forward-16",
+            "[data-testid=control-button-skip-forward]"
+        ],
+        "previous": [
+            ".spoticon-skip-back-16",
+            "[data-testid=control-button-skip-back]"
+        ],
+        "shuffle": [
+            ".spoticon-shuffle-16",
+            "[data-testid=control-button-shuffle]"
+        ],
+        "repeat": [
+            ".spoticon-repeat-16",
+            ".spoticon-repeatonce-16",
+            "[data-testid=control-button-repeat]"
+        ],
+        "like": [
+            "button[aria-label='Add to Liked Songs']"
+        ],
+        "volume-mute": [
+            ".volume-bar__icon-button.control-button",
+            "[data-testid=volume-bar-toggle-mute-button]"
+        ]
+    };
+
     constructor() {
         this.initialize();
     }
 
     initialize() {
-        this.initializeCommands();
-        this.initializeTabUpdates();
-        this.initializeInstallHandler();
+        this.registerInstallHandler();
+        this.registerCommands();
+        this.registerTabUpdates();
     }
 
-    initializeInstallHandler() {
-        chrome.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
-            if (reason === 'install' || reason === 'update') {
+    registerInstallHandler() {
+        chrome.runtime.onInstalled.addListener(
+            async ({ reason, previousVersion }) => {
                 try {
-                    // Check if this is an update from version 3.1.0 or lower
-                    if (reason === 'update' && previousVersion && this.isVersionLowerOrEqual(previousVersion, '3.1.0')) {
-                        // Show update notice
-                        chrome.tabs.create({
-                            url: chrome.runtime.getURL('update-notice.html')
-                        });
-                    }
-
-                    const result = await chrome.storage.sync.get('settings');
-                    if (!result.settings) {
-                        // console.log('[SpotOn] Initializing default settings...');
-                        await chrome.storage.sync.set({
-                            settings: {
-                                spoton: true, righter: true, font: true, fontLsize: true,
-                                shadow: true, roundAlbumArt: true, spinAlbum: true, thickerPB: true,
-                                rainbowProgressbar: false, rainbowControls: true, reducedTransparency: false,
-                                lyricsColor: false, disableHi: true, hideMusixmatch: true, hideMusicVids: false,
-                                hideMerch: false, hidePremButton: true, hidePodcasts: true,
-                                hideOnTour: false, hidePiP: false, hideScroll: false, hideVolBar: false,
-                                hideAlbumArt: false, hideAppearsOn: false,
-                                hideFansLiked: false, hideFeatArtist: false,
-                                hideNPB: false, hideNPV: false, hideSDura: false, hideSHeart: false,
-                                hideCB: false, hideSpotifyOffers: false, hideArtistPick: false,
-                                hideDevicePicker: false, hideLyricsButton: false,
-                                hidePIcon: false, hideHi: false,
-                                hideAbout: false, hometopsel: true, footernomore: true,
-                                byeappthing: true, removeLikedCover: false, youwontlike: false,
-                                removeMoreLike: false, removeDiscoveron: false, hiddenPDura: false,
-                                hiddenPHeart: false, hiddenPInfo: false, hiddenSPL: false,
-                                hiddenSAlbum: false, hiddenSDate: false,
-                                hiddenSInfo: false, hiddenSTime: false, scrollNPB: false,
-                                hiddenNPVqueue: false, hiddenNPVtour: true, hiddenNPVartist: false,
-                                hiddenNPVcredits: false
-                            }
-                        });
-                        // console.log('[SpotOn] Default settings initialized successfully');
-                    } else {
-                        // console.log('[SpotOn] Settings already exist, skipping initialization');
-                    }
-                    await chrome.storage.local.remove(['spoton-custom-css']);
-                    // console.log('[SpotOn] Cleared old CSS from localStorage');
+                    await this.handleInstall(reason, previousVersion);
                 } catch (error) {
-                    console.error('[SpotOn] Error initializing settings:', error);
+                    console.error('[SpotOn] Install handler failed:', error);
                 }
             }
-        });
+        );
     }
 
-    initializeCommands() {
-        chrome.commands.onCommand.addListener(async (command) => {
-            try {
-                const tabs = await chrome.tabs.query({ url: "https://open.spotify.com/*" });
-                await Promise.all(tabs.map(tab => this.sendCommandToTab(command, tab.id)));
-            } catch (error) {
-                console.error(`[SpotOn Hotkeys] Error sending command '${command}':`, error);
-            }
-        });
-    }
+    async handleInstall(reason, previousVersion) {
+        if (!['install', 'update'].includes(reason)) return;
 
-    async sendCommandToTab(command, tabId) {
-        try {
-            await chrome.scripting.executeScript({
-                target: { tabId },
-                func: (command) => {
-                    const findAndClick = (command) => {
-                        const DENY = ".extension-lyrics-button";
-                        const VALUE_SET = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-
-                        const animate = (e) => {
-                            e.style.transition = 'transform 0.4s ease-in-out';
-                            e.style.transform = 'scale(1.2)';
-                            setTimeout(() => e.style.transform = 'scale(1)', 200);
-                        };
-
-                        const clickAndAnimate = (e) => {
-                            if (!e) throw new Error("Element not found");
-                            e.click();
-                            animate(e);
-                        };
-
-                        const usingSlider = (selector, goUp) => {
-                            const slider = document.querySelector(selector);
-                            if (!slider) return;
-                            const value = parseInt(goUp ? slider.max : slider.min);
-                            VALUE_SET.call(slider, value);
-                            slider.dispatchEvent(new Event("change", { value, bubbles: true }));
-                        };
-
-                        const commandSelectors = {
-                            "play-pause": [".spoticon-play-16", ".spoticon-pause-16", "[data-testid=control-button-play]", "[data-testid=control-button-pause]", "[data-testid=control-button-playpause]"],
-                            "next": [".spoticon-skip-forward-16", "[data-testid=control-button-skip-forward]"],
-                            "previous": [".spoticon-skip-back-16", "[data-testid=control-button-skip-back]"],
-                            "shuffle": [".spoticon-shuffle-16", "[data-testid=control-button-shuffle]"],
-                            "repeat": [".spoticon-repeat-16", ".spoticon-repeatonce-16", "[data-testid=control-button-repeat]"],
-                            "like": ["button[aria-label='Add to Liked Songs']"],
-                            "volume-mute": [".volume-bar__icon-button.control-button", "[data-testid=volume-bar-toggle-mute-button]"],
-                        };
-
-                        const usingSelector = (command) => {
-                            const selectors = commandSelectors[command];
-                            if (!selectors) throw new Error(`Selector for command '${command}' not found`);
-                            const selector = selectors.map(s => `${s}:not(${DENY})`).join(", ");
-                            const element = document.querySelector(selector);
-                            if (element) clickAndAnimate(element);
-                        };
-
-                        if (["volume-up", "volume-down"].includes(command)) {
-                            usingSlider("[class*=volume] input[type=range]", command === "volume-up");
-                        } else if (["seek-forward", "seek-backward"].includes(command)) {
-                            usingSlider("[class=playback-bar] input[type=range]", command === "seek-forward");
-                        } else {
-                            usingSelector(command);
-                        }
-                    };
-
-                    findAndClick(command);
-                },
-                args: [command]
+        if (
+            reason === 'update' &&
+            previousVersion &&
+            this.isVersionLowerOrEqual(previousVersion, '3.1.0')
+        ) {
+            chrome.tabs.create({
+                url: chrome.runtime.getURL('update-notice.html')
             });
-        } catch (error) {
-            console.error(`[SpotOn Hotkeys] Error executing '${command}':`, error);
         }
+
+        await this.initializeDefaultSettings();
+        await chrome.storage.local.remove(
+            BackgroundManager.STORAGE_KEYS.CUSTOM_CSS
+        );
     }
 
-    initializeTabUpdates() {
-        chrome.tabs.onUpdated.removeListener(this.handleTabUpdate);
-        chrome.tabs.onUpdated.addListener(this.handleTabUpdate.bind(this));
+    async initializeDefaultSettings() {
+        const result = await chrome.storage.sync.get(
+            BackgroundManager.STORAGE_KEYS.SETTINGS
+        );
+
+        if (result.settings) return;
+
+        await chrome.storage.sync.set({
+            settings: DEFAULT_SETTINGS
+        });
     }
 
-    async handleTabUpdate(tabId, changeInfo, tab) {
-        if (changeInfo.status === 'complete' && tab.url?.startsWith('https://open.spotify.com/')) {
-            // console.log('[SpotOn] Spotify tab loaded, applying saved CSS');
-            const { navColor, lyricsColor } = await chrome.storage.sync.get(['navColor', 'lyricsColor']);
-            // console.log('[SpotOn] Retrieved color values:', { navColor, lyricsColor });
-
-            try {
-                await chrome.scripting.executeScript({
-                    target: { tabId },
-                    func: () => {
-                        // console.log('[SpotOn] Removing existing styles');
-                        const existingStyles = [
-                            document.getElementById('spoton-color-theme'),
-                            document.getElementById('spoton-custom-css')
-                        ].filter(Boolean);
-                        existingStyles.forEach(style => {
-                            // console.log('[SpotOn] Removing style:', style.id);
-                            style.remove();
-                        });
-                    }
-                });
-            } catch (error) {
-                console.error('[SpotOn] Error removing existing styles:', error);
-            }
-
-            if (navColor || lyricsColor) {
-                // console.log('[SpotOn] Generating color theme CSS with values:', { navColor, lyricsColor });
-                let colorThemeCSS = '';
-
-                if (navColor) {
-                    colorThemeCSS += `
-.sqKERfoKl4KwrtHqcKOd,
-.JG5J9NWJkaUO9fiKECMA,
-.OTfMDdomT5S7B5dbYTT8,
-.EhyK_jJzB2PcWXd5lg24,
-#context-menu[aria-labelledby="device-picker-icon-button"]:has(#device-picker-header [data-testid="animated-now-playing"]),
-.aCtCKL9BxAoHeVZS0uRs.bk509U3ZhZc9YBJAmoPB,
-.uV8q95GGAb2VDtL3gpYa,
-.lYpiKR_qEjl1jGGyEvsA,
-div#Desktop_LeftSidebar_Id,
-.AzO2ondhaHJntbGy_3_S,
-div#Desktop_LeftSidebar_Id,
-.Nw1INlIyra3LT1JjvoqH,
-#main > div.Root.encore-dark-theme > div.ZQftYELq0aOsg6tPbVbV > div.JG5J9NWJkaUO9fiKECMA,
-.pGU_qEtNT1qWKjrRbvan,
-.EZFyDnuQnx5hw78phLqP {
-    ${navColor.includes('http') ?
-                            `background-image: url(${navColor}) !important;
-         background-size: cover !important;
-         background-attachment: fixed !important;
-         background-repeat: no-repeat !important;
-         background-blend-mode: soft-light !important;` :
-                            `background-color: ${navColor} !important;`}
-    overflow-x: none !important;
-}`;
-                }
-
-                if (lyricsColor) {
-                    colorThemeCSS += `
-.nw6rbs8R08fpPn7RWW2w.aeO5D7ulxy19q4qNBrkk {
-    color: ${lyricsColor} !important;
-}`;
-                }
-
+    registerCommands() {
+        chrome.commands.onCommand.addListener(
+            async (command) => {
                 try {
-                    // console.log('[SpotOn] Applying color theme CSS:', colorThemeCSS);
-                    await chrome.scripting.executeScript({
-                        target: { tabId },
-                        func: (css) => {
-                            // console.log('[SpotOn] Creating color theme style element');
-                            const style = document.createElement('style');
-                            style.id = 'spoton-color-theme';
-                            style.textContent = css;
-                            document.head.appendChild(style);
-                            // console.log('[SpotOn] Color theme style applied');
-                        },
-                        args: [colorThemeCSS]
+                    const tabs = await chrome.tabs.query({
+                        url: BackgroundManager.SPOTIFY_URL
                     });
+
+                    await Promise.all(
+                        tabs.map(tab =>
+                            this.executeCommand(tab.id, command)
+                        )
+                    );
                 } catch (error) {
-                    console.error('[SpotOn] Error applying color theme CSS:', error);
+                    console.error(
+                        `[SpotOn] Command failed: ${command}`,
+                        error
+                    );
                 }
             }
+        );
+    }
+
+    async executeCommand(tabId, command) {
+        return chrome.scripting.executeScript({
+            target: { tabId },
+            func: this.commandExecutor,
+            args: [command, BackgroundManager.COMMAND_SELECTORS]
+        });
+    }
+
+    commandExecutor(command, selectorsMap) {
+        const DENY = '.extension-lyrics-button';
+
+        const animate = (element) => {
+            element.style.transition = 'transform .2s ease';
+            element.style.transform = 'scale(1.15)';
+
+            setTimeout(() => {
+                element.style.transform = 'scale(1)';
+            }, 200);
+        };
+
+        const clickElement = (element) => {
+            if (!element) return;
+            element.click();
+            animate(element);
+        };
+
+        const setSliderValue = (selector, max) => {
+            const slider = document.querySelector(selector);
+
+            if (!slider) return;
+
+            const setter = Object.getOwnPropertyDescriptor(
+                HTMLInputElement.prototype,
+                'value'
+            ).set;
+
+            setter.call(slider, max ? slider.max : slider.min);
+
+            slider.dispatchEvent(
+                new Event('change', { bubbles: true })
+            );
+        };
+
+        if (command === 'volume-up') {
+            return setSliderValue(
+                '[class*=volume] input[type=range]',
+                true
+            );
         }
+
+        if (command === 'volume-down') {
+            return setSliderValue(
+                '[class*=volume] input[type=range]',
+                false
+            );
+        }
+
+        const selectors = selectorsMap[command];
+
+        if (!selectors) return;
+
+        const query = selectors
+            .map(s => `${s}:not(${DENY})`)
+            .join(',');
+
+        clickElement(document.querySelector(query));
     }
 
-    async handleSpotifySearch(query) {
-        const encodedQuery = encodeURIComponent(query);
-        const url = `https://open.spotify.com/search/${encodedQuery}`;
-        await chrome.tabs.create({ url });
-    }
+    registerTabUpdates() {
+        chrome.tabs.onUpdated.addListener(
+            async (tabId, changeInfo, tab) => {
+                if (
+                    changeInfo.status !== 'complete' ||
+                    !tab.url?.startsWith('https://open.spotify.com/')
+                ) {
+                    return;
+                }
 
-    async openSpotify() {
-        await chrome.tabs.create({ url: 'https://open.spotify.com' });
-    }
-
-    async injectFeatures(tabId) {
-        try {
-            const settings = await chrome.storage.sync.get('settings');
-            if (settings.settings) {
-                chrome.tabs.sendMessage(tabId, {
-                    type: 'INIT_FEATURES',
-                    settings: settings.settings
-                });
+                await this.applyStyles(tabId);
             }
+        );
+    }
+
+    async applyStyles(tabId) {
+        try {
+            const [localData, syncData] = await Promise.all([
+                chrome.storage.local.get([
+                    BackgroundManager.STORAGE_KEYS.CUSTOM_CSS
+                ]),
+                chrome.storage.sync.get([
+                    BackgroundManager.STORAGE_KEYS.NAV_COLOR,
+                    BackgroundManager.STORAGE_KEYS.LYRICS_COLOR
+                ])
+            ]);
+
+            const customCSS =
+                localData[BackgroundManager.STORAGE_KEYS.CUSTOM_CSS];
+
+            const css =
+                customCSS ||
+                this.generateThemeCSS(
+                    syncData.navColor,
+                    syncData.lyricsColor
+                );
+
+            if (!css) return;
+
+            await this.injectStyle(
+                tabId,
+                BackgroundManager.STYLE_IDS.CUSTOM,
+                css
+            );
+
         } catch (error) {
-            console.error('Error injecting features:', error);
+            console.error('[SpotOn] Failed applying styles:', error);
         }
     }
 
-    // Helper method to compare versions
-    isVersionLowerOrEqual(version1, version2) {
-        const v1 = version1.split('.').map(Number);
-        const v2 = version2.split('.').map(Number);
+    generateThemeCSS(navColor, lyricsColor) {
+        let css = '';
 
-        for (let i = 0; i < Math.max(v1.length, v2.length); i++) {
-            const num1 = v1[i] || 0;
-            const num2 = v2[i] || 0;
-            if (num1 < num2) return true;
-            if (num1 > num2) return false;
+        if (navColor) {
+            css += `
+.sidebar {
+    ${
+        navColor.includes('http')
+            ? `
+        background-image: url(${navColor}) !important;
+        background-size: cover !important;
+        background-repeat: no-repeat !important;
+        `
+            : `
+        background-color: ${navColor} !important;
+        `
+    }
+}
+`;
         }
+
+        if (lyricsColor) {
+            css += `
+.lyrics {
+    color: ${lyricsColor} !important;
+}
+`;
+        }
+
+        return css;
+    }
+
+    async injectStyle(tabId, styleId, css) {
+        await chrome.scripting.executeScript({
+            target: { tabId },
+            func: (styleId, css) => {
+                document.getElementById(styleId)?.remove();
+
+                const style = document.createElement('style');
+
+                style.id = styleId;
+                style.textContent = css;
+
+                document.head.appendChild(style);
+            },
+            args: [styleId, css]
+        });
+    }
+
+    isVersionLowerOrEqual(v1, v2) {
+        const a = v1.split('.').map(Number);
+        const b = v2.split('.').map(Number);
+
+        for (let i = 0; i < Math.max(a.length, b.length); i++) {
+            const x = a[i] || 0;
+            const y = b[i] || 0;
+
+            if (x < y) return true;
+            if (x > y) return false;
+        }
+
         return true;
     }
 }
 
-const backgroundManager = new BackgroundManager();
+const DEFAULT_SETTINGS = {
+    spoton: true,
+    righter: true,
+    font: true,
+    fontLsize: true
+    // ...
+};
 
-chrome.runtime.onInstalled.addListener(async () => {
-    const { customCSS } = await chrome.storage.local.get('customCSS');
-    const tabs = await chrome.tabs.query({ url: 'https://open.spotify.com/*' });
-
-    for (const tab of tabs) {
-        try {
-            await chrome.scripting.executeScript({
-                target: { tabId: tab.id },
-                func: (cssId) => {
-                    const existingStyle = document.getElementById(cssId);
-                    if (existingStyle) existingStyle.remove();
-                },
-                args: ['spoton-custom-css']
-            });
-
-            if (customCSS) {
-                await chrome.scripting.executeScript({
-                    target: { tabId: tab.id },
-                    func: (css, cssId) => {
-                        const style = document.createElement('style');
-                        style.id = cssId;
-                        style.textContent = css;
-                        document.head.appendChild(style);
-                    },
-                    args: [customCSS, 'spoton-custom-css']
-                });
-            }
-        } catch (error) {
-            console.error('Error handling CSS in tab:', error);
-        }
-    }
-});
-
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'complete' && tab.url?.startsWith('https://open.spotify.com/')) {
-        // console.log('[SpotOn] Spotify tab loaded, applying saved CSS');
-        const [localStorageResult, syncStorageResult] = await Promise.all([
-            chrome.storage.local.get(['spoton-custom-css']),
-            chrome.storage.sync.get(['navColor', 'lyricsColor'])
-        ]);
-
-        const savedCSS = localStorageResult['spoton-custom-css'];
-        const { navColor, lyricsColor } = syncStorageResult;
-
-        if (savedCSS) {
-            try {
-                await chrome.scripting.executeScript({
-                    target: { tabId },
-                    func: (cssId) => {
-                        const existingStyle = document.getElementById(cssId);
-                        if (existingStyle) existingStyle.remove();
-                    },
-                    args: ['spoton-custom-css']
-                });
-
-                await chrome.scripting.executeScript({
-                    target: { tabId },
-                    func: (css, cssId) => {
-                        const style = document.createElement('style');
-                        style.id = cssId;
-                        style.textContent = css;
-                        document.head.appendChild(style);
-                    },
-                    args: [savedCSS, 'spoton-custom-css']
-                });
-            } catch (error) {
-                console.error('[SpotOn] Error applying CSS to new tab:', error);
-            }
-        } else if (navColor || lyricsColor) {
-            let css = '';
-
-            if (navColor) {
-                css += `
-.sqKERfoKl4KwrtHqcKOd,
-.JG5J9NWJkaUO9fiKECMA,
-.OTfMDdomT5S7B5dbYTT8,
-.EhyK_jJzB2PcWXd5lg24,
-#context-menu[aria-labelledby="device-picker-icon-button"]:has(#device-picker-header [data-testid="animated-now-playing"]),
-.aCtCKL9BxAoHeVZS0uRs.bk509U3ZhZc9YBJAmoPB,
-.uV8q95GGAb2VDtL3gpYa,
-.lYpiKR_qEjl1jGGyEvsA,
-div#Desktop_LeftSidebar_Id,
-.AzO2ondhaHJntbGy_3_S,
-div#Desktop_LeftSidebar_Id,
-.Nw1INlIyra3LT1JjvoqH,
-#main > div.Root.encore-dark-theme > div.ZQftYELq0aOsg6tPbVbV > div.JG5J9NWJkaUO9fiKECMA,
-.pGU_qEtNT1qWKjrRbvan,
-.EZFyDnuQnx5hw78phLqP {
-    ${navColor.includes('http') ?
-                        `background-image: url(${navColor}) !important;
-         background-size: cover !important;
-         background-attachment: fixed !important;
-         background-repeat: no-repeat !important;
-         background-blend-mode: soft-light !important;` :
-                        `background-color: ${navColor} !important;`}
-    overflow-x: none !important;
-}`;
-            }
-
-            if (lyricsColor) {
-                css += `
-.nw6rbs8R08fpPn7RWW2w.aeO5D7ulxy19q4qNBrkk {
-    color: ${lyricsColor} !important;
-}`;
-            }
-
-            if (css) {
-                try {
-                    await chrome.scripting.executeScript({
-                        target: { tabId },
-                        func: (css, cssId) => {
-                            const style = document.createElement('style');
-                            style.id = cssId;
-                            style.textContent = css;
-                            document.head.appendChild(style);
-                        },
-                        args: [css, 'spoton-custom-css']
-                    });
-                } catch (error) {
-                    console.error('[SpotOn] Error applying generated CSS to new tab:', error);
-                }
-            }
-        }
-    }
-}); 
+new BackgroundManager();
