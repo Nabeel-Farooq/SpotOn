@@ -1,2 +1,8 @@
-/* youwontlike.css - Removes the "YOU'LL LOVE THIS" no thanks, i don't need a hivemind to tell me what's good, i'll find my own music. */
-.bjB8WZd0Ev30ZFbiScDm { display: none !important; }
+/* youwontlike.css
+   Hides Spotify's "You'll Love This" recommendation section.
+   Personal music discovery > algorithmic suggestions.
+*/
+
+.bjB8WZd0Ev30ZFbiScDm {
+    display: none !important;
+}
