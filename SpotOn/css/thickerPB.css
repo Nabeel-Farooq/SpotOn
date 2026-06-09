@@ -1,5 +1,11 @@
-/* thickerPB.css - Thicker player bar, looks pretty nice. i like it. */
-.playback-bar *,.w699O0LgQRghXyl3bs9u,.TywOcKZEqNynWecCiATc,.p1ULRzPc4bD8eQ4T_wyp,.nav-ylx .GD2gbRtcs5dOjMGAM_Y4 {
-  --is-active-fg-color: var(--lyrics-color-background) !important;
-  --progress-bar-height: 8px !important;
+/* thickerPB.css
+   Makes the playback progress bar thicker.
+*/
+
+.playback-bar *,
+.w699O0LgQRghXyl3bs9u,
+.TywOcKZEqNynWecCiATc,
+.p1ULRzPc4bD8eQ4T_wyp,
+.nav-ylx .GD2gbRtcs5dOjMGAM_Y4 {
+    --progress-bar-height: 8px !important;
 }
